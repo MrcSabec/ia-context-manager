@@ -62,6 +62,51 @@ public class ChatController {
         // Reconstrói a janela de contexto completa na memória RAM antes de enviar
         List<App.Conteudo> historicoContexto = new ArrayList<>();
         List<String[]> mensagensSalvas = db.carregarHistorico();
+        // --- TRATAMENTO DE SINCRONIZAÇÃO DE PASTA COMPLETA ---
+        if (entradaUsuario.startsWith("/obsidian ")) {
+            String caminhoPasta = entradaUsuario.substring(10).trim();
+            System.out.println("Iniciando varredura em lote da pasta: " + caminhoPasta);
+
+            String contextoCofre = LeitorObsidian.extrairPastaCompleta(caminhoPasta);
+
+            if (contextoCofre != null) {
+                String diretriz = "[DIRETRIZ DE SISTEMA/CONHECIMENTO ABSOLUTO]: Você está recebendo a base de dados completa do Obsidian do usuário. Use todas essas informações unificadas para guiar suas próximas respostas: \n\n" + contextoCofre;
+
+                historicoContexto.add(new App.Conteudo("user", List.of(new App.Parte(diretriz))));
+                db.salvarMensagem("user", diretriz);
+
+                return new MensagemResponse("✨ **Omnisciência Ativada!** O ÉDEN varreu a pasta do seu Obsidian e absorveu todas as notas `.md` e mapas `.canvas` simultaneamente.");
+            }
+            return new MensagemResponse("**Erro:** Não foi possível acessar a pasta especificada. Verifique se o caminho está correto no Ubuntu.");
+        }
+        if (entradaUsuario.startsWith("/canvas ")) {
+            String caminhoCanvas = entradaUsuario.substring(8).trim();
+            String textoCanvas = LeitorObsidian.extrairCanvas(caminhoCanvas);
+
+            if (textoCanvas != null) {
+                String diretriz = "[DIRETRIZ DE SISTEMA/OBSIDIAN CANVAS]: O usuário compartilhou dados de um mapa mental. Memorize estes fragmentos de conhecimento: \n\n" + textoCanvas;
+
+                historicoContexto.add(new App.Conteudo("user", List.of(new App.Parte(diretriz))));
+                db.salvarMensagem("user", diretriz);
+
+                return new MensagemResponse("Mapa mental sincronizado! O ÉDEN absorveu a estrutura visual do seu Canvas.");
+            }
+            return new MensagemResponse("**Erro:** Não foi possível localizar ou interpretar o arquivo `.canvas`.");
+        }
+        if (entradaUsuario.startsWith("/nota ")) {
+            String caminhoNota = entradaUsuario.substring(6).trim();
+            String textoNota = LeitorObsidian.extrairNota(caminhoNota);
+
+            if (textoNota != null) {
+                String diretriz = "[DIRETRIZ DE SISTEMA/OBSIDIAN]: O usuário compartilhou uma anotação do seu Cofre local. Memorize e use como contexto primário: \n\n" + textoNota;
+
+                historicoContexto.add(new App.Conteudo("user", List.of(new App.Parte(diretriz))));
+                db.salvarMensagem("user", diretriz);
+
+                return new MensagemResponse("Nota do Obsidian sincronizada com sucesso ao núcleo do ÉDEN!");
+            }
+            return new MensagemResponse("**Erro:** Não foi possível localizar ou ler a nota. Verifique se o caminho no Ubuntu está correto e termina em `.md`.");
+        }
         for (String[] msg : mensagensSalvas) {
             historicoContexto.add(new App.Conteudo(msg[0], List.of(new App.Parte(msg[1]))));
         }
