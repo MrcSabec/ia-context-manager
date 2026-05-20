@@ -1,0 +1,14 @@
+com/iacontext/ChatController$MensagemRequest.class
+com/iacontext/GeminiService.class
+com/iacontext/OllamaService.class
+com/iacontext/ChatController.class
+com/iacontext/ChatController$RegistroHistorico.class
+com/iacontext/ClienteIA.class
+com/iacontext/App.class
+com/iacontext/LeitorObsidian.class
+com/iacontext/App$Parte.class
+com/iacontext/GerenciadorBancoDeDados.class
+com/iacontext/ChatController$MensagemResponse.class
+com/iacontext/App$Conteudo.class
+com/iacontext/LeitorPDF.class
+com/iacontext/App$RequisicaoGemini.class

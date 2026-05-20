@@ -12,144 +12,169 @@ import java.util.List;
 @RequestMapping("/api")
 public class ChatController {
 
-    private final ClienteIA inteligenciaArtificial = new GeminiService();
+    private final OllamaService inteligenciaArtificial = new OllamaService();
     private final Gson gson = new Gson();
 
-    // --- MINI STRUCTS PARA A WEB ---
     public record MensagemRequest(String texto) {}
     public record MensagemResponse(String texto) {}
     public record RegistroHistorico(String role, String texto) {}
 
-    // 1. ROTA: Lista todos os chats locais (arquivos .db)
+
     @GetMapping("/chats")
     public List<String> listarChats() {
         List<String> nomesChats = new ArrayList<>();
         File diretorioAtual = new File(".");
-        // Filtra arquivos que terminam com .db
         File[] arquivos = diretorioAtual.listFiles((dir, nome) -> nome.endsWith(".db"));
 
         if (arquivos != null) {
             for (File arquivo : arquivos) {
-                // Adiciona na lista removendo a extensão .db
                 nomesChats.add(arquivo.getName().replace(".db", ""));
             }
         }
         return nomesChats;
     }
 
-    // 2. ROTA: Carrega o histórico completo de um chat específico
+
     @GetMapping("/chat-historico/{nomeSessao}")
     public List<RegistroHistorico> carregarHistoricoSessao(@PathVariable String nomeSessao) {
-        // Instancia o banco dinamicamente para ler
         GerenciadorBancoDeDados db = new GerenciadorBancoDeDados(nomeSessao);
-        List<String[]> mensagensSalvas = db.carregarHistorico();
+        List<String[]> mensagensSalvas = db.carregarHistoricoCompleto();
 
         List<RegistroHistorico> historicoParaEnvio = new ArrayList<>();
         for (String[] msg : mensagensSalvas) {
-            historicoParaEnvio.add(new RegistroHistorico(msg[0], msg[1]));
+            if (!msg[2].equals("documento")) {
+                historicoParaEnvio.add(new RegistroHistorico(msg[0], msg[1]));
+            }
         }
         return historicoParaEnvio;
     }
 
-    // 3. ROTA: Processa mensagem de um chat específico (URL Dinâmica)
     @PostMapping("/chat/{nomeSessao}")
     public MensagemResponse processarMensagem(@PathVariable String nomeSessao, @RequestBody MensagemRequest request) {
         String entradaUsuario = request.texto();
-
-        // Instancia o banco dinamicamente com base na URL
         GerenciadorBancoDeDados db = new GerenciadorBancoDeDados(nomeSessao);
 
-        // Reconstrói a janela de contexto completa na memória RAM antes de enviar
-        List<App.Conteudo> historicoContexto = new ArrayList<>();
-        List<String[]> mensagensSalvas = db.carregarHistorico();
-        // --- TRATAMENTO DE SINCRONIZAÇÃO DE PASTA COMPLETA ---
         if (entradaUsuario.startsWith("/obsidian ")) {
             String caminhoPasta = entradaUsuario.substring(10).trim();
             System.out.println("Iniciando varredura em lote da pasta: " + caminhoPasta);
-
             String contextoCofre = LeitorObsidian.extrairPastaCompleta(caminhoPasta);
 
             if (contextoCofre != null) {
-                String diretriz = "[DIRETRIZ DE SISTEMA/CONHECIMENTO ABSOLUTO]: Você está recebendo a base de dados completa do Obsidian do usuário. Use todas essas informações unificadas para guiar suas próximas respostas: \n\n" + contextoCofre;
-
-                historicoContexto.add(new App.Conteudo("user", List.of(new App.Parte(diretriz))));
-                db.salvarMensagem("user", diretriz);
-
-                return new MensagemResponse("✨ **Omnisciência Ativada!** O ÉDEN varreu a pasta do seu Obsidian e absorveu todas as notas `.md` e mapas `.canvas` simultaneamente.");
+                db.salvarMensagem("user", contextoCofre, "documento");
+                return new MensagemResponse("✨ **Omnisciência Ativada!** Base de dados do Obsidian indexada localmente no cluster do ÉDEN.");
             }
-            return new MensagemResponse("**Erro:** Não foi possível acessar a pasta especificada. Verifique se o caminho está correto no Ubuntu.");
+            return new MensagemResponse("**Erro:** Não foi possível acessar a pasta especificada no Ubuntu.");
         }
+
         if (entradaUsuario.startsWith("/canvas ")) {
             String caminhoCanvas = entradaUsuario.substring(8).trim();
             String textoCanvas = LeitorObsidian.extrairCanvas(caminhoCanvas);
 
             if (textoCanvas != null) {
-                String diretriz = "[DIRETRIZ DE SISTEMA/OBSIDIAN CANVAS]: O usuário compartilhou dados de um mapa mental. Memorize estes fragmentos de conhecimento: \n\n" + textoCanvas;
-
-                historicoContexto.add(new App.Conteudo("user", List.of(new App.Parte(diretriz))));
-                db.salvarMensagem("user", diretriz);
-
-                return new MensagemResponse("Mapa mental sincronizado! O ÉDEN absorveu a estrutura visual do seu Canvas.");
+                db.salvarMensagem("user", textoCanvas, "documento");
+                return new MensagemResponse("Mapa mental sincronizado com sucesso como conhecimento frio.");
             }
-            return new MensagemResponse("**Erro:** Não foi possível localizar ou interpretar o arquivo `.canvas`.");
+            return new MensagemResponse("**Erro:** Não foi possível ler o arquivo `.canvas`.");
         }
+
         if (entradaUsuario.startsWith("/nota ")) {
             String caminhoNota = entradaUsuario.substring(6).trim();
             String textoNota = LeitorObsidian.extrairNota(caminhoNota);
 
             if (textoNota != null) {
-                String diretriz = "[DIRETRIZ DE SISTEMA/OBSIDIAN]: O usuário compartilhou uma anotação do seu Cofre local. Memorize e use como contexto primário: \n\n" + textoNota;
-
-                historicoContexto.add(new App.Conteudo("user", List.of(new App.Parte(diretriz))));
-                db.salvarMensagem("user", diretriz);
-
-                return new MensagemResponse("Nota do Obsidian sincronizada com sucesso ao núcleo do ÉDEN!");
+                db.salvarMensagem("user", textoNota, "documento");
+                return new MensagemResponse("Nota isolada adicionada à biblioteca de consulta.");
             }
-            return new MensagemResponse("**Erro:** Não foi possível localizar ou ler a nota. Verifique se o caminho no Ubuntu está correto e termina em `.md`.");
-        }
-        for (String[] msg : mensagensSalvas) {
-            historicoContexto.add(new App.Conteudo(msg[0], List.of(new App.Parte(msg[1]))));
+            return new MensagemResponse("**Erro:** Arquivo `.md` não localizado.");
         }
 
-        // --- TRATAMENTO DE PDF (Suporte mantido) ---
         if (entradaUsuario.startsWith("/pdf ")) {
             String caminho = entradaUsuario.substring(5).trim();
             String textoPdf = LeitorPDF.extrairTexto(caminho);
             if (textoPdf != null) {
-                String diretriz = "[DIRETRIZ DE SISTEMA]: Leia e use o contexto a seguir como base: " + textoPdf;
-                historicoContexto.add(new App.Conteudo("user", List.of(new App.Parte(diretriz))));
-                db.salvarMensagem("user", diretriz);
-                return new MensagemResponse("Mestre, documento PDF integrado à memória do **" + nomeSessao.toUpperCase() + "** com sucesso!");
+                db.salvarMensagem("user", textoPdf, "documento");
+                return new MensagemResponse("Documento PDF integrado com sucesso.");
             }
-            return new MensagemResponse("Erro crítico: Não foi possível ler o arquivo PDF no caminho especificado.");
+            return new MensagemResponse("Erro crítico ao ler o arquivo PDF.");
         }
 
-        // 1. Salva e injeta no contexto
-        historicoContexto.add(new App.Conteudo("user", List.of(new App.Parte(entradaUsuario))));
-        db.salvarMensagem("user", entradaUsuario);
 
-        // 2. Envia para o Gemini
-        App.RequisicaoGemini requisicao = new App.RequisicaoGemini(historicoContexto);
-        String jsonParaEnviar = gson.toJson(requisicao);
-        String respostaBrutaJSON = inteligenciaArtificial.enviarRequisicao(jsonParaEnviar);
+        db.salvarMensagem("user", entradaUsuario, "chat");
 
-        // 3. Trata e Devolve para o Frontend (Markdown mantido)
+
+        boolean modoCriativo = false;
+        String mensagemProcessada = entradaUsuario;
+
+        if (entradaUsuario.toLowerCase().startsWith("/criar ")) {
+            modoCriativo = true;
+            mensagemProcessada = entradaUsuario.substring(7).trim();
+        }
+
+        String[] palavras = mensagemProcessada.toLowerCase().split("\\s+");
+        List<String> termosChave = new ArrayList<>();
+        for (String p : palavras) {
+            String limpa = p.replaceAll("[^a-zA-Z0-9áéíóúâêôãõç]", "");
+            if (limpa.length() > 3) { // Ignora conectivos curtos
+                termosChave.add(limpa);
+            }
+        }
+
+        List<String> todosDocumentos = db.carregarDocumentos();
+        StringBuilder contextoDocumentalRelevante = new StringBuilder();
+
+        for (String doc : todosDocumentos) {
+            boolean contemTermo = false;
+            String docMinusculo = doc.toLowerCase();
+            for (String termo : termosChave) {
+                if (docMinusculo.contains(termo)) {
+                    contemTermo = true;
+                    break;
+                }
+            }
+            if (contemTermo) {
+                contextoDocumentalRelevante.append(doc).append("\n\n");
+            }
+        }
+
+
+        List<String[]> historicoChatRecente = db.carregarJanelaDeslizante(6);
+
+
+        StringBuilder payloadContextoFocalizado = new StringBuilder();
+
+        if (contextoDocumentalRelevante.length() > 0) {
+            payloadContextoFocalizado.append("[CONHECIMENTO EXTRAÍDO DOS DOCUMENTOS EM DISCO]:\n")
+                    .append(contextoDocumentalRelevante)
+                    .append("--------------------------------------------------\n\n");
+        }
+
+        payloadContextoFocalizado.append("[HISTÓRICO RECENTE DA CONVERSA]:\n");
+        for (String[] msg : historicoChatRecente) {
+            String papel = msg[0].equals("model") ? "ÉDEN" : "Usuário";
+            if (!msg[1].equals(entradaUsuario)) {
+                payloadContextoFocalizado.append("[").append(papel).append("]: ").append(msg[1]).append("\n\n");
+            }
+        }
+
+
+        System.out.println("================ PACOTE ENVIADO PARA A IA ================");
+        System.out.println("MODO CRIATIVO ATIVADO: " + modoCriativo);
+        System.out.println(payloadContextoFocalizado.toString());
+        System.out.println("==========================================================");
+
         try {
-            JsonObject jsonObjeto = JsonParser.parseString(respostaBrutaJSON).getAsJsonObject();
-            String textoRespostaIA = jsonObjeto.getAsJsonArray("candidates")
-                    .get(0).getAsJsonObject()
-                    .getAsJsonObject("content")
-                    .getAsJsonArray("parts")
-                    .get(0).getAsJsonObject()
-                    .get("text").getAsString();
+            String respostaIA = inteligenciaArtificial.sendMessage(mensagemProcessada, payloadContextoFocalizado.toString(), modoCriativo);
 
+            if (respostaIA.startsWith("Erro Crítico") || respostaIA.startsWith("Falha na comunicação")) {
+                return new MensagemResponse("⚠️ **" + respostaIA + "**\n\nVerifique o terminal do seu Ubuntu.");
+            }
 
-            db.salvarMensagem("model", textoRespostaIA);
-
-            return new MensagemResponse(textoRespostaIA);
+            db.salvarMensagem("model", respostaIA, "chat");
+            return new MensagemResponse(respostaIA);
 
         } catch (Exception e) {
-            return new MensagemResponse("**Erro de Comunicação:** Os servidores do Google estão sobrecarregados ou responderam em um formato inválido. Tente novamente em alguns segundos.");
+            e.printStackTrace();
+            return new MensagemResponse("💥 **Erro no processamento do fluxo:** " + e.getMessage());
         }
     }
 }
