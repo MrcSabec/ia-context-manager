@@ -12,3 +12,7 @@
 *.db
 *.sqlite
 memoria.db
+# Pastas do IntelliJ e Maven
+.idea/
+target/
+*.class
